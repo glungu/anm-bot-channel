@@ -1,0 +1,24 @@
+{
+    "name": "anm-bot-channel",
+    "version": "0.0.1",
+    "description": "Experimental channel bot",
+    "main": "index.js",
+    "scripts": {
+        "start": "node index.js"
+    },
+    "dependencies": {
+        "botbuilder": "^3.14.0",
+        "fs": "0.0.1-security",
+        "restify": "^6.3.4",
+        "sync-request": "^4.1.0"
+    },
+    "engines": {
+        "node": "^8.9.0"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/glungu/anm-bot-channel"
+    },
+    "author": "Gennady Lungu",
+    "license": "MIT"
+}
