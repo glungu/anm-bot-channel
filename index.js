@@ -2,69 +2,25 @@ var restify = require('restify');
 var builder = require('botbuilder');
 var request = require('request');
 var anm = require('./anm');
-//var oracledb = require('oracledb');
 
-// var requestSync = require('sync-request');
-
-//var globalTunnel = require('global-tunnel');
-//process.env.http_proxy = 'http://genproxy.amdocs.com:8080';
-//process.env.https_proxy = 'https://genproxy.amdocs.com:8080';
-//globalTunnel.initialize();
+// var globalTunnel = require('global-tunnel');
+// process.env.http_proxy = 'http://genproxy.amdocs.com:8080';
+// process.env.https_proxy = 'https://genproxy.amdocs.com:8080';
+// globalTunnel.initialize();
 // globalTunnel.end();
 
-var luisUrlPrefix = "https://westus.api.cognitive.microsoft.com/luis/v2.0/apps/";
-var luisKey = "6abe6f0082814c1d9edc2ab97ff0ad30";
-var luisAppID = "3482ee72-4216-44ed-877a-c6f25a70f294";
-var luisStaging = "true";
-var luisURL = process.env.LUIS_APP_URL || luisUrlPrefix + luisAppID + "?"
-    + "subscription-key=" + luisKey + "&"
-    + "staging=" + luisStaging;
 
-var model = [
-    {
-        offerId: 0,
-        offer: 'Unlimited internet access for just $29.99 per mounth!',
-        details: '',
-        show: false
-    },
-    {
-        offerId: 1,
-        offer: '2Gb per day for $2.99',
-        details: '',
-        show: true
-    },
-    {
-        offerId: 2,
-        offer: '2Gb per day for $2.99',
-        details: '',
-        show: true
-    }
-];
+var model = [];
+var currentUser = "0";
+const SOLD_STATE = "SOLD";
+const IGNORED_STATE = "IGNORED";
+const sms_png = "file:/" + __dirname + "/images/sms-128_1.png";
+const call_png = "file:/" + __dirname + "/images/call-128.png";
+const data_png = "file:/" + __dirname + "/images/data-128.png";
 
-// var connection2 = oracledb.getConnection(
-//     {
-//         user: "anm3158dbg2",
-//         password: "anm3158dbg2",
-//         connectString: "jdbc:oracle:thin:@dbserv.corp.amdocs.com:1521:sid11r2"
-//     },
-//     function (err, connection) {
-//         if (err) {
-//             console.error(err);
-//             return;
-//         }
-//         connection.execute(
-//             "SELECT * "
-//             + "FROM NM_BOT_RECORD "
-//             + "WHERE department_id < 70 "
-//             + "ORDER BY department_id",
-//             function (err, result) {
-//                 if (err) {
-//                     console.error(err);
-//                     return;
-//                 }
-//                 console.log(result.rows);
-//             });
-//     });
+// buttons
+const BUTTON_BACK_TO_MAIN_MENU = "Back to main menu";
+const BUTTON_BACK_TO_ALL_OFFERS = "Back to all offers";
 
 
 // Setup Restify Server
@@ -84,43 +40,14 @@ server.post('/api/messages', connector.listen());
 
 // Create bot
 var bot = new builder.UniversalBot(connector, [
-    function(session) {
-        if (session.dialogData.location == null) {
+    function (session) {
+        if (session.dialogData.location === null) {
             session.dialogData.location = {};
         }
-
-        var msg = new builder.Message(session).attachments([
-            new builder.HeroCard(session)
-                .title('You have '+model.length+' offers.')
-                .text("Would you like to see them? Please confirm")
-                .buttons([
-                    builder.CardAction.imBack(session, "Last", "See last"),
-                    builder.CardAction.imBack(session, "All", "See all"),
-                    builder.CardAction.imBack(session, "Ignore", "Ignore")
-                ])
-        ]);
-        builder.Prompts.choice(session, msg, ["Last", "All", "Ignore"]);
-    },
-    function(session, results) {
-        switch (results.response.entity) {
-            case 'Last':
-                session.beginDialog("AskLast");
-                break;
-            case 'All':
-                session.beginDialog("AskAll");
-                break;
-            case 'Ignore':
-                session.beginDialog("AskIgnore");
-                break;
-            default:
-                session.send("Your intent is not clear to me...");
-                resetSession(session);
-                break;
-        }
+        session.beginDialog("Start");
     }
 ]);
 
-// bot.recognizer(new builder.LuisRecognizer(luisURL));
 
 // Send welcome when conversation with bot is started, by initiating the root dialog
 bot.on('conversationUpdate', function (message) {
@@ -133,158 +60,250 @@ bot.on('conversationUpdate', function (message) {
     }
 });
 
-bot.dialog('Ignore', [
-    function (session, args, next) {
-        if (session.userData.intent) {
-            session.send("No change was applied.");
+bot.dialog('Start', [
+        function (session, args, next) {
+            model = anm.getOffers(currentUser);
+            var buttons = [];
+            var choice = [];
+            if (model.length > 0) {
+                if (model.length > 1) {
+                    buttons.push(builder.CardAction.imBack(session, "Last", "See last"));
+                    buttons.push(builder.CardAction.imBack(session, "All", "See all"));
+                    buttons.push(builder.CardAction.imBack(session, "Ignore all", "Ignore all"));
+                    choice = ["Last", "All", "Ignore all"];
+                } else {
+                    buttons.push(builder.CardAction.imBack(session, "Last", "See"));
+                    buttons.push(builder.CardAction.imBack(session, "Ignore all", "Ignore"));
+                    choice = ["Last", "Ignore all"]
+                }
+
+
+                var msg = new builder.Message(session).attachments([
+                    new builder.HeroCard(session)
+                        .title('You have ' + model.length + ' offers.')
+                        .text("Would you like to see them? Please confirm")
+                        .buttons(buttons)
+                ]);
+
+                builder.Prompts.choice(session, msg, choice);
+            } else {
+                session.endDialog('You have no current offers. Please come back later!');
+            }
+        },
+        function (session, results) {
+            console.log("MAIN CALLBACK");
+            switch (results.response.entity) {
+                case 'Last':
+                    session.beginDialog("AskLast");
+                    break;
+                case 'All':
+                    session.beginDialog("AskAll");
+                    break;
+                case 'Ignore all':
+                    anm.ignoreAllOffer(currentUser);
+                    resetSession(session);
+                    break;
+                default:
+                    session.send("Your intent is not clear to me...");
+                    resetSession(session);
+                    break;
+            }
         }
+    ]
+);
+
+
+bot.dialog('afterBuy', [
+    function (session, args, next) {
+        var thumbnailCard = new builder.HeroCard(session)
+            .title("You successfully purchased package!")
+            //.text("You successfully purchased package!")
+            .buttons([
+                builder.CardAction.imBack(session, BUTTON_BACK_TO_MAIN_MENU, BUTTON_BACK_TO_MAIN_MENU)
+            ]);
+
+        var msg = new builder.Message(session).attachments([thumbnailCard]);
+        builder.Prompts.choice(session, msg, [BUTTON_BACK_TO_MAIN_MENU]);
+
+    }, function (session, results, value) {
         resetSession(session);
     }
-]).triggerAction({ matches: /(no|cancel)/i });
+]);
+
+bot.dialog('afterBuyAll', [
+    function (session, args, next) {
+
+        var buttons = [];
+        var choice = [];
+        buttons.push(builder.CardAction.imBack(session, BUTTON_BACK_TO_MAIN_MENU, BUTTON_BACK_TO_MAIN_MENU));
+        choice.push(BUTTON_BACK_TO_MAIN_MENU);
+        if (model.length > 0) {
+            buttons.push(builder.CardAction.imBack(session, BUTTON_BACK_TO_ALL_OFFERS, BUTTON_BACK_TO_ALL_OFFERS));
+            choice.push(BUTTON_BACK_TO_ALL_OFFERS)
+        }
+
+        var thumbnailCard = new builder.HeroCard(session)
+            .title("You successfully purchased package!")
+            //.text("You successfully purchased package!")
+            .buttons(buttons);
+
+        var msg = new builder.Message(session).attachments([thumbnailCard]);
+        builder.Prompts.choice(session, msg, choice);
+
+    }, function (session, results, value) {
+        if (results.response.entity) {
+            switch (results.response.entity) {
+                case  BUTTON_BACK_TO_ALL_OFFERS:
+                    session.beginDialog("AskAll");
+                    break;
+                default:
+                    resetSession(session);
+            }
+        }
+    }
+]);
 
 
 bot.dialog('AskLast', [
     function (session, args, next) {
-
         var lastOffer = model[model.length - 1];
+        var thumbnailCard = new builder.ThumbnailCard(session)
+            .title('Offer')
+            .subtitle(lastOffer.offer)
+            .text(lastOffer.description)
+            .images([
+                builder.CardImage.create(session, getImgByType(lastOffer))
+            ])
+            .buttons([
+                builder.CardAction.imBack(session, 'Buy', 'Buy'),
+                builder.CardAction.imBack(session, 'Ignore', 'Ignore'),
+                builder.CardAction.imBack(session, 'Back', 'Back')
+            ]);
 
+        var msg = new builder.Message(session).attachments([thumbnailCard]);
+        builder.Prompts.choice(session, msg, ["Buy", "Ignore", "Back"]);
 
-        var msg = new builder.Message(session)
-            .addAttachment({
-                'contentType': 'application/vnd.microsoft.card.adaptive',
-                'content': {
-                    '$schema': 'http://adaptivecards.io/schemas/adaptive-card.json',
-                    'type': 'AdaptiveCard',
-                    'version': '1.0',
-                    'body': [
-                        {
-                            'type': 'Container',
-                            'items': [
-                                {
-                                    'type': 'ColumnSet',
-                                    'columns': [
-                                        {
-                                            'type': 'Column',
-                                            'size': 'auto',
-                                            'items': [
-                                                {
-                                                    'type': 'Image',
-                                                    'url': 'https://placeholdit.imgix.net/~text?txtsize=65&txt=Adaptive+Cards&w=300&h=300',
-                                                    'size': 'medium',
-                                                    'style': 'person'
-                                                }
-                                            ]
-                                        },
-                                        {
-                                            'type': 'Column',
-                                            'size': 'stretch',
-                                            'items': [
-                                                {
-                                                    'type': 'TextBlock',
-                                                    'text': 'Last offer',
-                                                    'weight': 'bolder'
-                                                },
-                                                {
-                                                    'type': 'TextBlock',
-                                                    'text': lastOffer.offer,
-                                                    'wrap': true
-                                                }
-                                            ]
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
-                    ],
-                    'actions': [
-                        {
-                            "type": "Action.Submit",
-                            "title": "Buy",
-                            "data": {
-                                "type" : "Action.Buy"
-                            }
-                        },
-                        {
-                            "type": "Action.Submit",
-                            "title": "Back",
-                            "data": {
-                                "type" : "Action.Back"
-                            }
-                        }
-
-                    ]
-                }
-            });
-        // var msg = new builder.Message(session).attachments([
-        //
-        //
-        //     new builder.HeroCard(session)
-        //         .title(lastOffer.offer)
-        //         .text(" Please confirm")
-        //         .buttons([
-        //             builder.CardAction.imBack(session, "Action.Buy", "Buy"),
-        //             builder.CardAction.imBack(session, "Action.Back", "Back")
-        //         ])
-        // ]);
-
-
-
-
-        //
-        builder.Prompts.choice(session, msg, ["Action.Buy", "Action.Back"]);
-
-    },
-    function (session, results) {
-        switch (results.response.entity) {
-            case 'Action.Buy':
-                session.send("You successfully purchased package!");
-
-                resetSession(session);
-                break;
-            default:
-                resetSession(session);
-                break;
+    }, function (session, results, value) {
+        var lastOffer = model[model.length - 1];
+        if (results.response.entity) {
+            switch (results.response.entity) {
+                case  'Buy':
+                    anm.changeStateOffer(lastOffer.offerId, SOLD_STATE);
+                    session.beginDialog("afterBuy");
+                    break;
+                case  'Ignore':
+                    anm.changeStateOffer(lastOffer.offerId, IGNORED_STATE);
+                    resetSession(session);
+                    break;
+                default:
+                    resetSession(session);
+            }
         }
     }
 ]);
-
 
 bot.dialog('AskAll', [
     function (session, args, next) {
+        generateAllOffersMsg(session, model);
 
-        var lastOffer = model[model.length - 1];
-        var cards = [];
-        for (var i =0; i < model.length; i++){
-            var model2 = model[i];
-            cards.push(new builder.HeroCard(session)
-                .title(model2.offer)
-                .text(" Please confirm")
-                .buttons([
-                    builder.CardAction.imBack(session, 'offer_'+model2.offerId+'_buy', 'Buy'),
-                    builder.CardAction.imBack(session, "Back", "Back")
-                ]))
-        }
+    }, function (session, results) {
+        var entity = results.response.entity;
+        if (entity) {
+            var number = entity.indexOf("=");
+            var offerId = entity.substring(number + 2, entity.length);
+            var offer = findOfferById(offerId);
 
-
-        var msg = new builder.Message(session).attachments(cards);
-        builder.Prompts.choice(session, msg, ["Buy", "Back"]);
-
-    },
-    function (session, results) {
-        switch (results.response.entity) {
-            case 'Buy':
-                session.beginDialog("AskLast");
-                break;
-            default:
+            if (entity.indexOf("Buy") > -1) {
+                anm.changeStateOffer(offer.offerId, SOLD_STATE);
+                model = anm.getOffers(currentUser);
+                session.beginDialog("afterBuyAll");
+            } else if (entity.indexOf("Ignore") > -1) {
+                anm.changeStateOffer(offer.offerId, IGNORED_STATE);
+                model = anm.getOffers(currentUser);
+                if (model.length > 0) {
+                    session.beginDialog("AskAll");
+                } else {
+                    resetSession(session);
+                }
+            } else {
                 resetSession(session);
-                break;
+            }
         }
     }
 ]);
 
+function findOfferById(id) {
+    var result;
+    for (var i = 0; i < model.length; i++) {
+        if (model[i].offerId === id) {
+            result = model[i];
+        }
+    }
+    return result;
+}
+
+function generateAllOffersMsg(session, model) {
+    var cards = [];
+    var choice = [];
+    for (var i = 0; i < model.length; i++) {
+        var actionBuy = 'Buy offer with id = ' + model[i].offerId;
+        var actionIgnore = 'Ignore offer with id = ' + model[i].offerId;
+        var buttons = [];
+        buttons.push(builder.CardAction.imBack(session, actionBuy, 'Buy'));
+        if (model[i].url !== null && model[i].url !== '') {
+            buttons.push(builder.CardAction.openUrl(session, model[i].url, 'Learn More'));
+        }
+        buttons.push(builder.CardAction.imBack(session, actionIgnore, 'Ignore'));
+
+
+        cards.push(new builder.ThumbnailCard(session)
+            .title('Offer')
+            .subtitle(model[i].offer)
+            .text(model[i].description)
+            .images([
+                builder.CardImage.create(session, getImgByType(model[i]))
+            ])
+            .buttons(buttons)
+        );
+        choice.push(actionBuy);
+        choice.push(actionIgnore);
+    }
+
+    var msg = new builder.Message(session)
+        .attachmentLayout(builder.AttachmentLayout.carousel)
+        .attachments(cards);
+
+    var messageToBack = new builder.Message(session).attachments([
+        new builder.HeroCard(session)
+            .buttons([builder.CardAction.imBack(session, BUTTON_BACK_TO_MAIN_MENU, BUTTON_BACK_TO_MAIN_MENU)])
+    ]);
+
+    choice.push(BUTTON_BACK_TO_MAIN_MENU);
+    builder.Prompts.choice(session, msg, choice);
+
+    session.send(messageToBack);
+
+}
+
+function getImgByType(offer) {
+    switch (offer.type) {
+        case 'call':
+            return call_png;
+            break;
+        case  'sms':
+            return sms_png;
+            break;
+        case 'data':
+            return data_png;
+            break;
+        default:
+            return "";
+    }
+}
 
 
 function resetSession(session) {
+    console.log("!!! resetSession ");
     session.userData = {};
     session.clearDialogStack();
     session.reset();

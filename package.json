@@ -1,24 +1,7 @@
 {
-    "name": "anm-bot-channel",
-    "version": "0.0.1",
-    "description": "Experimental channel bot",
-    "main": "index.js",
-    "scripts": {
-        "start": "node index.js"
-    },
-    "dependencies": {
-        "botbuilder": "^3.14.0",
-        "fs": "0.0.1-security",
-        "restify": "^6.3.4",
-        "sync-request": "^4.1.0"
-    },
-    "engines": {
-        "node": "^8.9.0"
-    },
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/glungu/anm-bot-channel"
-    },
-    "author": "Gennady Lungu",
-    "license": "MIT"
+  title: "Up to 75 Mbps Download Speeds Up to 75 Mbps Download Speeds Up to 75 Mbps Download Speeds",
+  type: data,
+  description: "Limited time - FREE Professional InstallationAdd X1 DVR free for 12 monthsTalk as much as you want to nearly half the world",
+  url: "",
+  expired: "2018/04/01 21:02:44"
 }
