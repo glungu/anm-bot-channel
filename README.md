@@ -1,6 +1,7 @@
 # anm-bot-channel
 
 ##Settings:
+
 **1) 10.anm.dictionaries.json**
 ```
   {
@@ -103,4 +104,20 @@ Example: Direct addressing request for subscriber '123':
         </ns2:pushRequest>
     </soap:Body>
 </soap:Envelope>
+```
+
+**Table in Oracle**
+```
+create table NM_BOT_RECORD
+(
+  ID NUMBER not null
+    primary key,
+  TITLE VARCHAR2(255),
+  TYPE VARCHAR2(10),
+  DESCRIPTION VARCHAR2(255),
+  URL VARCHAR2(255),
+  EXPIRED DATE,
+  STATUS VARCHAR2(10),
+  USERID NUMBER(19) default 0 not null
+)
 ```
